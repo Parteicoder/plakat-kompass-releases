@@ -62,6 +62,7 @@ jobs:
           gpg --batch --yes --detach-sign --armor -o $dist/Release.gpg $dist/Release
           rm -rf "$GNUPGHOME"
           cp ../plakat-kompass.gpg plakat-kompass.gpg
+          cp ../index.html index.html
           touch .nojekyll
           find . -type f | sort
 
