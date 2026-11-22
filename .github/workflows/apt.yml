@@ -1,0 +1,73 @@
+name: APT-Paketquelle
+
+# Baut aus allen .deb-Dateien der Releases eine signierte APT-Paketquelle und veröffentlicht sie über GitHub Pages.
+on:
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: apt
+  cancel-in-progress: false
+
+jobs:
+  apt:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pakete der letzten Releases holen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site/pool/main
+          # nur die letzten 5 Releases behalten (Speicher von GitHub Pages ist begrenzt)
+          for tag in $(gh release list --limit 5 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease | not) | .tagName'); do
+            gh release download "$tag" --pattern '*_amd64.deb' --dir site/pool/main --skip-existing || true
+          done
+          ls -l site/pool/main
+
+      - name: Index bauen und signieren
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends apt-utils
+          cd site
+          dist=dists/stable
+          mkdir -p $dist/main/binary-amd64
+          apt-ftparchive packages pool > $dist/main/binary-amd64/Packages
+          gzip -9kf $dist/main/binary-amd64/Packages
+          cat > apt-release.conf <<CONF
+          APT::FTPArchive::Release::Origin "Plakat Kompass";
+          APT::FTPArchive::Release::Label "Plakat Kompass";
+          APT::FTPArchive::Release::Suite "stable";
+          APT::FTPArchive::Release::Codename "stable";
+          APT::FTPArchive::Release::Architectures "amd64";
+          APT::FTPArchive::Release::Components "main";
+          CONF
+          apt-ftparchive -c apt-release.conf release $dist > $dist/Release
+          rm apt-release.conf
+          export GNUPGHOME="$(mktemp -d)"
+          echo "$APT_SIGNING_KEY" | gpg --batch --import
+          gpg --batch --yes --clearsign -o $dist/InRelease $dist/Release
+          gpg --batch --yes --detach-sign --armor -o $dist/Release.gpg $dist/Release
+          rm -rf "$GNUPGHOME"
+          cp ../plakat-kompass.gpg plakat-kompass.gpg
+          touch .nojekyll
+          find . -type f | sort
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
