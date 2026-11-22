@@ -36,7 +36,7 @@ jobs:
           ls -l site/pool/main
           # feste Namen für die Direkt-Downloads der Download-Seite (neueste Version)
           cp "site/pool/main/$(ls site/pool/main | sort -V | tail -1)" site/Plakat-Kompass.deb
-          gh release download --pattern 'Plakat-Kompass-Setup.exe' --pattern 'Plakat-Kompass.msi' --dir site --skip-existing
+          gh release download --pattern 'Plakat-Kompass.msi' --dir site --skip-existing
 
       - name: Index bauen und signieren
         env:
