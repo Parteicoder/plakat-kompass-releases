@@ -36,7 +36,14 @@ jobs:
           ls -l site/pool/main
           # feste Namen für die Direkt-Downloads der Download-Seite (neueste Version)
           cp "site/pool/main/$(ls site/pool/main | sort -V | tail -1)" site/Plakat-Kompass.deb
-          gh release download --pattern 'Plakat-Kompass.msi' --dir site --skip-existing
+          gh release download --pattern 'Plakat-Kompass.msi' --dir site --skip-existing || true  # Release ohne MSI: dann keine version.json
+          # Versionsdatei für den Updater der Windows-App: neueste Version (Tag vX.Y.Z-B) und Summe der MSI
+          if [ -f site/Plakat-Kompass.msi ]; then
+          tag=$(gh release view --json tagName --jq .tagName)
+          ver=${tag#v}
+          printf '{"version":"%s","build":%s,"windows":{"url":"https://download.plakat-kompass.de/Plakat-Kompass.msi","sha256":"%s"}}\n' "${ver%-*}" "${ver##*-}" "$(sha256sum site/Plakat-Kompass.msi | cut -d' ' -f1)" > site/version.json
+          cat site/version.json
+          fi
 
       - name: Index bauen und signieren
         env:
